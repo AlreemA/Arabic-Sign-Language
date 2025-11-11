@@ -70,7 +70,7 @@ def preprocess_and_predict(img):
     return img_cropped, predicted_label, confidence
 
 # ------------------ TABS ------------------
-tab1, tab2 = st.tabs(["Webcam Demo", "Upload Photo Demo"])
+tab1, tab2 = st.tabs(["📷 Webcam Demo", "📤 Upload Photo Demo"])
 
 # ------------------ DEMO 1: WEBCAM ------------------
 with tab1:
@@ -78,6 +78,7 @@ with tab1:
     camera_input = st.camera_input("Take a picture")
     if camera_input is not None:
         img = np.array(Image.open(camera_input))
+        # Use preprocessing with flip + crop for webcam
         img_cropped, predicted_label, confidence = preprocess_and_predict(img)
         st.image(img_cropped, caption="Detected Hand Region", use_column_width=True)
         st.markdown(f"### 🧾 Predicted Letter: **{predicted_label}**")
@@ -89,7 +90,25 @@ with tab2:
     uploaded_file = st.file_uploader("Choose an image...", type=["jpg","jpeg","png"])
     if uploaded_file is not None:
         img = np.array(Image.open(uploaded_file))
-        img_cropped, predicted_label, confidence = preprocess_and_predict(img)
-        st.image(img_cropped, caption="Detected Hand Region", use_column_width=True)
+
+        # ------------------ PREPROCESS FOR UPLOAD (NO FLIP / NO CROP) ------------------
+        img_resized = cv2.resize(img, (128,128))
+        img_normalized = img_resized / 255.0
+        img_expanded = np.expand_dims(img_normalized, axis=0)
+
+        # ------------------ PREDICT ------------------
+        prediction = model.predict(img_expanded)
+        if isinstance(prediction, dict):
+            prediction_tensor = list(prediction.values())[0]
+        else:
+            prediction_tensor = prediction
+        prediction_np = prediction_tensor.numpy() if hasattr(prediction_tensor, "numpy") else np.array(prediction_tensor)
+
+        predicted_class = str(np.argmax(prediction_np, axis=-1).item())
+        confidence = float(np.max(prediction_np))
+        predicted_label = class_name[predicted_class]
+
+        # ------------------ DISPLAY ------------------
+        st.image(img, caption="Uploaded Image", use_column_width=True)
         st.markdown(f"### 🧾 Predicted Letter: **{predicted_label}**")
         st.write(f"**Confidence:** {confidence:.2%}")
