@@ -46,7 +46,7 @@ if camera_input is not None:
 
     # Predict
     prediction = model.predict(img_expanded)
-    predicted_class = str(np.argmax(prediction, axis=1)[0])
+    predicted_class = str(np.argmax(prediction, axis=-1).item())  # ✅ fixed
     confidence = float(np.max(prediction))
 
     # Get class label
@@ -56,3 +56,4 @@ if camera_input is not None:
     st.image(img, caption="Captured Image", use_column_width=True)
     st.markdown(f"### 🧾 Predicted Letter: **{predicted_label}**")
     st.write(f"**Confidence:** {confidence:.2%}")
+
