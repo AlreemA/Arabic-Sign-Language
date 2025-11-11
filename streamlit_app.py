@@ -35,7 +35,7 @@ model = load_asl_model()
 camera_input = st.camera_input("Take a picture")
 
 if camera_input is not None:
-    # Convert the image to a NumPy array
+    # Convert image to NumPy
     img = Image.open(camera_input)
     img = np.array(img)
 
@@ -47,14 +47,20 @@ if camera_input is not None:
     # Predict
     prediction = model.predict(img_expanded)
 
-    # Convert tensor to numpy
-    prediction_np = prediction.numpy() if hasattr(prediction, "numpy") else np.array(prediction)
+    # Handle dict output from TFSMLayer
+    if isinstance(prediction, dict):
+        prediction_tensor = list(prediction.values())[0]
+    else:
+        prediction_tensor = prediction
+
+    # Convert to numpy
+    prediction_np = prediction_tensor.numpy() if hasattr(prediction_tensor, "numpy") else np.array(prediction_tensor)
 
     # Get predicted class and confidence
     predicted_class = str(np.argmax(prediction_np, axis=-1).item())
     confidence = float(np.max(prediction_np))
 
-    # Get class label
+    # Map to label
     predicted_label = class_name[predicted_class]
 
     # Display
