@@ -39,8 +39,6 @@ if camera_input is not None:
     # Convert image to NumPy
     img = np.array(Image.open(camera_input))
 
-    # Flip horizontally to match training orientation
-    img = cv2.flip(img, 1)
 
     # ------------------ HAND DETECTION ------------------
     # Convert to HSV for skin detection
