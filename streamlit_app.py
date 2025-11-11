@@ -3,6 +3,8 @@ import tensorflow as tf
 import cv2
 import numpy as np
 from PIL import Image
+from keras.layers import TFSMLayer
+from keras.models import Sequential
 
 # ------------------ CONFIG ------------------
 st.set_page_config(page_title="Arabic Sign Language Detection", layout="centered")
@@ -22,7 +24,9 @@ class_name = {
 # ------------------ MODEL LOADING ------------------
 @st.cache_resource
 def load_asl_model():
-    model = tf.keras.models.load_model("model2/")  # Folder containing saved_model.pb
+    # Wrap the old SavedModel folder as a Keras layer
+    model_layer = TFSMLayer("model2/", call_endpoint='serving_default')
+    model = Sequential([model_layer])
     return model
 
 model = load_asl_model()
