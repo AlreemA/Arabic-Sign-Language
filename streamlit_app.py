@@ -32,26 +32,48 @@ def load_asl_model():
 model = load_asl_model()
 
 # ------------------ CAMERA INPUT ------------------
+# ------------------ CAMERA INPUT ------------------
 camera_input = st.camera_input("Take a picture")
 
 if camera_input is not None:
     # Convert image to NumPy
     img = np.array(Image.open(camera_input))
 
-    # Flip to match training
+    # Flip horizontally to match training orientation
     img = cv2.flip(img, 1)
 
-    # Resize & normalize
-    img_resized = cv2.resize(img, (128, 128))
-    img_normalized = img_resized / 255.0
-    img_expanded = np.expand_dims(img_normalized, axis=0)
+    # ------------------ HAND DETECTION ------------------
+    # Convert to HSV for skin detection
+    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+    lower_skin = np.array([0, 20, 70], dtype=np.uint8)
+    upper_skin = np.array([20, 255, 255], dtype=np.uint8)
+    mask = cv2.inRange(hsv, lower_skin, upper_skin)
 
-    # Predict
+    # Find contours
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if contours:
+        largest = max(contours, key=cv2.contourArea)
+        x, y, w_box, h_box = cv2.boundingRect(largest)
+        # Crop hand region
+        img_cropped = img[y:y+h_box, x:x+w_box]
+    else:
+        # fallback if no hand detected
+        img_cropped = img
+
+    # ------------------ PREPROCESS ------------------
+    img_resized = cv2.resize(img_cropped, (128,128))
+    img_normalized = img_resized / 255.0
+    img_expanded = np.expand_dims(img_normalized, axis=0)  # batch dimension
+
+    # ------------------ PREDICT ------------------
     prediction = model.predict(img_expanded)
+
+    # Handle dict output from TFSMLayer
     if isinstance(prediction, dict):
         prediction_tensor = list(prediction.values())[0]
     else:
         prediction_tensor = prediction
+
     prediction_np = prediction_tensor.numpy() if hasattr(prediction_tensor, "numpy") else np.array(prediction_tensor)
 
     # Get predicted class & confidence
@@ -59,9 +81,10 @@ if camera_input is not None:
     confidence = float(np.max(prediction_np))
     predicted_label = class_name[predicted_class]
 
-    # Display
-    st.image(img, caption="Captured Image", use_column_width=True)
+    # ------------------ DISPLAY ------------------
+    st.image(img_cropped, caption="Detected Hand Region", use_column_width=True)
     st.markdown(f"### 🧾 Predicted Letter: **{predicted_label}**")
     st.write(f"**Confidence:** {confidence:.2%}")
+
 
 
