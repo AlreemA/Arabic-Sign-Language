@@ -8,7 +8,7 @@ from keras.models import Sequential
 
 # ------------------ CONFIG ------------------
 st.set_page_config(page_title="Arabic Sign Language Detection", layout="centered")
-st.title("🤟 Arabic Sign Language Detection Demo")
+st.title(" Arabic Sign Language Detection Demo")
 
 st.write("Use your webcam to capture a hand sign and predict the Arabic letter.")
 
