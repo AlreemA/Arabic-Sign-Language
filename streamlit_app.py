@@ -69,6 +69,13 @@ def preprocess_and_predict(img):
 
     return img_cropped, predicted_label, confidence
 
+st.image(
+    "https://i.pinimg.com/originals/e9/a9/93/e9a993a246e099cda75db9116447a281.png",
+    caption="Arabic Sign Language Letter Signs",
+    use_column_width=True
+)
+
+
 # ------------------ TABS ------------------
 tab1, tab2 = st.tabs(["📷 Webcam Demo", "📤 Upload Photo Demo"])
 
