@@ -36,31 +36,27 @@ camera_input = st.camera_input("Take a picture")
 
 if camera_input is not None:
     # Convert image to NumPy
-    img = Image.open(camera_input)
-    img = np.array(img)
+    img = np.array(Image.open(camera_input))
 
-    # Preprocess
+    # Flip to match training
+    img = cv2.flip(img, 1)
+
+    # Resize & normalize
     img_resized = cv2.resize(img, (128, 128))
     img_normalized = img_resized / 255.0
     img_expanded = np.expand_dims(img_normalized, axis=0)
 
     # Predict
     prediction = model.predict(img_expanded)
-
-    # Handle dict output from TFSMLayer
     if isinstance(prediction, dict):
         prediction_tensor = list(prediction.values())[0]
     else:
         prediction_tensor = prediction
-
-    # Convert to numpy
     prediction_np = prediction_tensor.numpy() if hasattr(prediction_tensor, "numpy") else np.array(prediction_tensor)
 
-    # Get predicted class and confidence
+    # Get predicted class & confidence
     predicted_class = str(np.argmax(prediction_np, axis=-1).item())
     confidence = float(np.max(prediction_np))
-
-    # Map to label
     predicted_label = class_name[predicted_class]
 
     # Display
