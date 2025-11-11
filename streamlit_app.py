@@ -8,9 +8,8 @@ from keras.models import Sequential
 
 # ------------------ CONFIG ------------------
 st.set_page_config(page_title="Arabic Sign Language Detection", layout="centered")
-st.title(" Arabic Sign Language Detection Demo")
-
-st.write("Use your webcam to capture a hand sign and predict the Arabic letter.")
+st.title("Arabic Sign Language Detection Demo")
+st.write("You can either capture a hand sign from your webcam or upload a photo.")
 
 # ------------------ CLASS LABELS ------------------
 class_name = {
@@ -31,58 +30,66 @@ def load_asl_model():
 
 model = load_asl_model()
 
-# ------------------ CAMERA INPUT ------------------
-# ------------------ CAMERA INPUT ------------------
-camera_input = st.camera_input("Take a picture")
+# ------------------ HELPER FUNCTION ------------------
+def preprocess_and_predict(img):
+    """Flip, detect hand, crop, resize, normalize, predict."""
+    # Flip horizontally
+    img = cv2.flip(img, 1)
 
-if camera_input is not None:
-    # Convert image to NumPy
-    img = np.array(Image.open(camera_input))
-
-
-    # ------------------ HAND DETECTION ------------------
-    # Convert to HSV for skin detection
+    # Hand detection using skin mask
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
     lower_skin = np.array([0, 20, 70], dtype=np.uint8)
     upper_skin = np.array([20, 255, 255], dtype=np.uint8)
     mask = cv2.inRange(hsv, lower_skin, upper_skin)
-
-    # Find contours
+    
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if contours:
         largest = max(contours, key=cv2.contourArea)
         x, y, w_box, h_box = cv2.boundingRect(largest)
-        # Crop hand region
         img_cropped = img[y:y+h_box, x:x+w_box]
     else:
-        # fallback if no hand detected
         img_cropped = img
 
-    # ------------------ PREPROCESS ------------------
+    # Resize & normalize
     img_resized = cv2.resize(img_cropped, (128,128))
     img_normalized = img_resized / 255.0
-    img_expanded = np.expand_dims(img_normalized, axis=0)  # batch dimension
+    img_expanded = np.expand_dims(img_normalized, axis=0)
 
-    # ------------------ PREDICT ------------------
+    # Predict
     prediction = model.predict(img_expanded)
-
-    # Handle dict output from TFSMLayer
     if isinstance(prediction, dict):
         prediction_tensor = list(prediction.values())[0]
     else:
         prediction_tensor = prediction
-
     prediction_np = prediction_tensor.numpy() if hasattr(prediction_tensor, "numpy") else np.array(prediction_tensor)
 
-    # Get predicted class & confidence
     predicted_class = str(np.argmax(prediction_np, axis=-1).item())
     confidence = float(np.max(prediction_np))
     predicted_label = class_name[predicted_class]
 
-    # ------------------ DISPLAY ------------------
-    st.image(img_cropped, caption="Detected Hand Region", use_column_width=True)
-    st.markdown(f"### 🧾 Predicted Letter: **{predicted_label}**")
-    st.write(f"**Confidence:** {confidence:.2%}")
+    return img_cropped, predicted_label, confidence
 
+# ------------------ TABS ------------------
+tab1, tab2 = st.tabs(["Webcam Demo", "Upload Photo Demo"])
 
+# ------------------ DEMO 1: WEBCAM ------------------
+with tab1:
+    st.write("Capture a hand sign using your webcam.")
+    camera_input = st.camera_input("Take a picture")
+    if camera_input is not None:
+        img = np.array(Image.open(camera_input))
+        img_cropped, predicted_label, confidence = preprocess_and_predict(img)
+        st.image(img_cropped, caption="Detected Hand Region", use_column_width=True)
+        st.markdown(f"### 🧾 Predicted Letter: **{predicted_label}**")
+        st.write(f"**Confidence:** {confidence:.2%}")
 
+# ------------------ DEMO 2: UPLOAD IMAGE ------------------
+with tab2:
+    st.write("Upload a hand sign image for prediction.")
+    uploaded_file = st.file_uploader("Choose an image...", type=["jpg","jpeg","png"])
+    if uploaded_file is not None:
+        img = np.array(Image.open(uploaded_file))
+        img_cropped, predicted_label, confidence = preprocess_and_predict(img)
+        st.image(img_cropped, caption="Detected Hand Region", use_column_width=True)
+        st.markdown(f"### 🧾 Predicted Letter: **{predicted_label}**")
+        st.write(f"**Confidence:** {confidence:.2%}")
