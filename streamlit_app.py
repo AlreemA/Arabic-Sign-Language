@@ -77,7 +77,7 @@ st.image(
 
 
 # ------------------ TABS ------------------
-tab1, tab2 = st.tabs(["📷 Webcam Demo", "📤 Upload Photo Demo"])
+tab1, tab2 = st.tabs(["Webcam Demo", "Upload Photo Demo"])
 
 # ------------------ DEMO 1: WEBCAM ------------------
 with tab1:
