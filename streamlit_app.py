@@ -39,15 +39,20 @@ if camera_input is not None:
     img = Image.open(camera_input)
     img = np.array(img)
 
-    # Preprocess (match training settings)
-    img_resized = cv2.resize(img, (128, 128))  # Match target_size
+    # Preprocess
+    img_resized = cv2.resize(img, (128, 128))
     img_normalized = img_resized / 255.0
     img_expanded = np.expand_dims(img_normalized, axis=0)
 
     # Predict
     prediction = model.predict(img_expanded)
-    predicted_class = str(np.argmax(prediction, axis=-1).item())  # ✅ fixed
-    confidence = float(np.max(prediction))
+
+    # Convert tensor to numpy
+    prediction_np = prediction.numpy() if hasattr(prediction, "numpy") else np.array(prediction)
+
+    # Get predicted class and confidence
+    predicted_class = str(np.argmax(prediction_np, axis=-1).item())
+    confidence = float(np.max(prediction_np))
 
     # Get class label
     predicted_label = class_name[predicted_class]
@@ -56,4 +61,5 @@ if camera_input is not None:
     st.image(img, caption="Captured Image", use_column_width=True)
     st.markdown(f"### 🧾 Predicted Letter: **{predicted_label}**")
     st.write(f"**Confidence:** {confidence:.2%}")
+
 
