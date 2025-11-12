@@ -27,11 +27,11 @@ class_name = {
 # ------------------ MODEL LOADING ------------------
 @st.cache_resource
 def load_model():
-    # Load MobileNetV3 small backbone
-    model = models.mobilenet_v3_small(weights=None)
-    # Replace classifier with correct number of classes
+    # Recreate the exact same architecture
+    model = models.mobilenet_v3_large(pretrained=False)
     model.classifier[3] = nn.Linear(model.classifier[3].in_features, 32)
-    # Load your checkpoint
+
+    # Load your trained weights
     state_dict = torch.load("best_mobilenetv3.pth", map_location="cpu")
     model.load_state_dict(state_dict)
     model.eval()
@@ -41,8 +41,10 @@ model = load_model()
 
 # ------------------ IMAGE TRANSFORMS ------------------
 transform = transforms.Compose([
-    transforms.Resize((128, 128)),
-    transforms.ToTensor()
+    transforms.Resize((224, 224)),  # match training
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                         std=[0.229, 0.224, 0.225])
 ])
 
 # ------------------ HAND CROP FUNCTION ------------------
@@ -58,37 +60,46 @@ def crop_hand(img_np):
     if contours:
         c = max(contours, key=cv2.contourArea)
         x,y,w,h = cv2.boundingRect(c)
-        return img_np[y:y+h, x:x+w]
+        cropped = img_np[y:y+h, x:x+w]
+        return cropped
     return img_np
 
 # ------------------ DEMOS ------------------
-tab1, tab2 = st.tabs(["Camera Demo", "Upload Image Demo"])
+tab1, tab2 = st.tabs(["📷 Camera Demo", "🖼 Upload Image Demo"])
 
 # ---- CAMERA DEMO ----
 with tab1:
     camera_input = st.camera_input("Take a picture")
+
     if camera_input is not None:
         img = Image.open(camera_input)
         img = img.transpose(Image.FLIP_LEFT_RIGHT)
         img_np = np.array(img)
+
+        # Crop hand
         img_cropped = crop_hand(img_np)
         img_tensor = transform(Image.fromarray(img_cropped)).unsqueeze(0)
+
         with torch.no_grad():
             outputs = model(img_tensor)
             probs = torch.softmax(outputs, dim=1)
             conf, pred_idx = torch.max(probs, dim=1)
+
         predicted_label = class_name[str(pred_idx.item())]
         st.image(img_cropped, caption=f"Predicted: {predicted_label} ({conf.item()*100:.2f}%)", use_container_width=True)
 
 # ---- UPLOAD DEMO ----
 with tab2:
     uploaded_file = st.file_uploader("Upload an image of a hand sign", type=["jpg", "jpeg", "png"])
+
     if uploaded_file is not None:
         img = Image.open(uploaded_file)
         img_tensor = transform(img).unsqueeze(0)
+
         with torch.no_grad():
             outputs = model(img_tensor)
             probs = torch.softmax(outputs, dim=1)
             conf, pred_idx = torch.max(probs, dim=1)
+
         predicted_label = class_name[str(pred_idx.item())]
         st.image(img, caption=f"Predicted: {predicted_label} ({conf.item()*100:.2f}%)", use_container_width=True)
