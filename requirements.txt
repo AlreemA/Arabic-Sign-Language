@@ -8,3 +8,4 @@ streamlit-webrtc
 pandas
 deep-translator
 av
+opencv-python
