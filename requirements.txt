@@ -4,3 +4,7 @@ torchvision
 opencv-python-headless
 Pillow
 numpy
+streamlit-webrtc 
+pandas
+deep-translator
+av
