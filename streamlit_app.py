@@ -15,7 +15,7 @@ import os
 import collections
 
 # ------------------ CONFIG ------------------
-st.set_page_config(page_title="Arabic Sign Language Detection", layout="centered")
+st.set_page_config(page_title="Arabic Sign Language Recognition", layout="centered")
 st.image(
     "https://i.pinimg.com/originals/e9/a9/93/e9a993a246e099cda75db9116447a281.png",
     use_container_width=True
@@ -136,6 +136,12 @@ with tab2:
 
 with tab3:
     st.write("**Real-time Arabic Sign Language Detection (Webcam Feed)**")
+    st.markdown(
+    "⚠️ **This demo only works when run locally.** "
+    "Please download the repository and follow the instructions in the README file if using cloud deployment link: "
+    "[GitHub Repo](https://github.com/AlreemA/Arabic-Sign-Language)",
+    unsafe_allow_html=True
+)
     run_live = st.checkbox("Start Live Detection")
 
     FRAME_WINDOW = st.image([])  # video frame placeholder
@@ -350,6 +356,12 @@ with tab4:
 # -------------------- TAB 5: ⚡ WORD BUILDER LIVE --------------------
 with tab5:
     st.write("## ⚡ Word Builder Live (Camera-Based)")
+    st.markdown(
+    "⚠️ **This demo only works when run locally.** "
+    "Please download the repository and follow the instructions in the README file if using cloud deployment link: "
+    "[GitHub Repo](https://github.com/AlreemA/Arabic-Sign-Language)",
+    unsafe_allow_html=True
+)
     st.caption("Hold a steady sign; when stable, the letter is added automatically (same logic as Tab 3).")
 
     # ---- Controls ----
