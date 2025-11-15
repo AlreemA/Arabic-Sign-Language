@@ -294,56 +294,56 @@ with tab4:
 
 # -------------------- TAB 5: ⚡ WORD BUILDER LIVE --------------------
 with tab5:
-if "d5_word" not in st.session_state:
-    st.session_state.d5_word = ""
-    st.session_state.d5_preds = collections.deque(maxlen=max_frames)
-    st.session_state.d5_confs = collections.deque(maxlen=max_frames)
-    st.session_state.d5_countdown = False
-    st.session_state.d5_countdown_start = 0.0
-
-lock_secs = st.slider("Lock-in Duration (s)", 1, 5, 2)
-
-def process_frame_word(frame: av.VideoFrame) -> av.VideoFrame:
-    img = frame.to_ndarray(format="rgb24")
-    cropped = crop_hand(img)
-    img_tensor = transform(Image.fromarray(cropped)).unsqueeze(0)
-
-    with torch.no_grad():
-        outputs = model(img_tensor)
-        probs = torch.softmax(outputs, dim=1)
-        conf, pred_idx = torch.max(probs, dim=1)
-
-    label = class_name[str(pred_idx.item())]
-    conf_val = float(conf.item())
-
-    st.session_state.d5_preds.append(label)
-    st.session_state.d5_confs.append(conf_val)
-
-    most_common = max(set(st.session_state.d5_preds), key=st.session_state.d5_preds.count)
-    freq = st.session_state.d5_preds.count(most_common) / len(st.session_state.d5_preds)
-    avg_conf = sum(st.session_state.d5_confs) / len(st.session_state.d5_confs)
-
-    # Stability check and countdown
-    if len(st.session_state.d5_preds) == max_frames and freq >= consistency_threshold and avg_conf >= conf_threshold:
-        if not st.session_state.d5_countdown:
-            st.session_state.d5_countdown = True
-            st.session_state.d5_countdown_start = time.time()
-        elapsed = time.time() - st.session_state.d5_countdown_start
-        remaining = lock_secs - elapsed
-        if remaining <= 0:
-            st.session_state.d5_word += arabic_map.get(most_common, "")
-            st.session_state.d5_preds.clear()
-            st.session_state.d5_confs.clear()
-            st.session_state.d5_countdown = False
-    else:
+    if "d5_word" not in st.session_state:
+        st.session_state.d5_word = ""
+        st.session_state.d5_preds = collections.deque(maxlen=max_frames)
+        st.session_state.d5_confs = collections.deque(maxlen=max_frames)
         st.session_state.d5_countdown = False
-
-    # Overlay text
-    cv2.putText(img, f"Word: {st.session_state.d5_word}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,200,0), 2)
-    return av.VideoFrame.from_ndarray(img, format="rgb24")
-
-webrtc_streamer(
-    key="word_builder_live",
-    mode=WebRtcMode.SENDRECV,
-    video_processor_factory=lambda: type("ProcessorWord", (), {"recv": process_frame_word})()
-)
+        st.session_state.d5_countdown_start = 0.0
+    
+    lock_secs = st.slider("Lock-in Duration (s)", 1, 5, 2)
+    
+    def process_frame_word(frame: av.VideoFrame) -> av.VideoFrame:
+        img = frame.to_ndarray(format="rgb24")
+        cropped = crop_hand(img)
+        img_tensor = transform(Image.fromarray(cropped)).unsqueeze(0)
+    
+        with torch.no_grad():
+            outputs = model(img_tensor)
+            probs = torch.softmax(outputs, dim=1)
+            conf, pred_idx = torch.max(probs, dim=1)
+    
+        label = class_name[str(pred_idx.item())]
+        conf_val = float(conf.item())
+    
+        st.session_state.d5_preds.append(label)
+        st.session_state.d5_confs.append(conf_val)
+    
+        most_common = max(set(st.session_state.d5_preds), key=st.session_state.d5_preds.count)
+        freq = st.session_state.d5_preds.count(most_common) / len(st.session_state.d5_preds)
+        avg_conf = sum(st.session_state.d5_confs) / len(st.session_state.d5_confs)
+    
+        # Stability check and countdown
+        if len(st.session_state.d5_preds) == max_frames and freq >= consistency_threshold and avg_conf >= conf_threshold:
+            if not st.session_state.d5_countdown:
+                st.session_state.d5_countdown = True
+                st.session_state.d5_countdown_start = time.time()
+            elapsed = time.time() - st.session_state.d5_countdown_start
+            remaining = lock_secs - elapsed
+            if remaining <= 0:
+                st.session_state.d5_word += arabic_map.get(most_common, "")
+                st.session_state.d5_preds.clear()
+                st.session_state.d5_confs.clear()
+                st.session_state.d5_countdown = False
+        else:
+            st.session_state.d5_countdown = False
+    
+        # Overlay text
+        cv2.putText(img, f"Word: {st.session_state.d5_word}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,200,0), 2)
+        return av.VideoFrame.from_ndarray(img, format="rgb24")
+    
+    webrtc_streamer(
+        key="word_builder_live",
+        mode=WebRtcMode.SENDRECV,
+        video_processor_factory=lambda: type("ProcessorWord", (), {"recv": process_frame_word})()
+    )
