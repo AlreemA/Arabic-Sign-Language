@@ -124,48 +124,48 @@ with tab2:
 
 with tab3:
     st.write("**Real-time Arabic Sign Language Detection (Webcam Feed)**")
-   max_frames = 10
-conf_threshold = 0.85
-consistency_threshold = 0.8
-
-if "live_preds" not in st.session_state:
-    st.session_state.live_preds = collections.deque(maxlen=max_frames)
-    st.session_state.live_confs = collections.deque(maxlen=max_frames)
-
-def process_frame(frame: av.VideoFrame) -> av.VideoFrame:
-    img = frame.to_ndarray(format="rgb24")
-    cropped = crop_hand(img)
-    img_tensor = transform(Image.fromarray(cropped)).unsqueeze(0)
-
-    with torch.no_grad():
-        outputs = model(img_tensor)
-        probs = torch.softmax(outputs, dim=1)
-        conf, pred_idx = torch.max(probs, dim=1)
-
-    label = class_name[str(pred_idx.item())]
-    conf_val = float(conf.item())
-
-    st.session_state.live_preds.append(label)
-    st.session_state.live_confs.append(conf_val)
-
-    # Consistency check
-    most_common = max(set(st.session_state.live_preds), key=st.session_state.live_preds.count)
-    freq = st.session_state.live_preds.count(most_common) / len(st.session_state.live_preds)
-    avg_conf = sum(st.session_state.live_confs) / len(st.session_state.live_confs)
-
-    text = f"{label} ({conf_val*100:.1f}%)"
-    if freq >= consistency_threshold and avg_conf >= conf_threshold and len(st.session_state.live_preds) == max_frames:
-        text += " ✅"
-
-    # Draw text on frame
-    cv2.putText(img, text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
-    return av.VideoFrame.from_ndarray(img, format="rgb24")
-
-webrtc_streamer(
-    key="live_demo",
-    mode=WebRtcMode.SENDRECV,
-    video_processor_factory=lambda: type("Processor", (), {"recv": process_frame})()
-)
+    max_frames = 10
+    conf_threshold = 0.85
+    consistency_threshold = 0.8
+    
+    if "live_preds" not in st.session_state:
+        st.session_state.live_preds = collections.deque(maxlen=max_frames)
+        st.session_state.live_confs = collections.deque(maxlen=max_frames)
+    
+    def process_frame(frame: av.VideoFrame) -> av.VideoFrame:
+        img = frame.to_ndarray(format="rgb24")
+        cropped = crop_hand(img)
+        img_tensor = transform(Image.fromarray(cropped)).unsqueeze(0)
+    
+        with torch.no_grad():
+            outputs = model(img_tensor)
+            probs = torch.softmax(outputs, dim=1)
+            conf, pred_idx = torch.max(probs, dim=1)
+    
+        label = class_name[str(pred_idx.item())]
+        conf_val = float(conf.item())
+    
+        st.session_state.live_preds.append(label)
+        st.session_state.live_confs.append(conf_val)
+    
+        # Consistency check
+        most_common = max(set(st.session_state.live_preds), key=st.session_state.live_preds.count)
+        freq = st.session_state.live_preds.count(most_common) / len(st.session_state.live_preds)
+        avg_conf = sum(st.session_state.live_confs) / len(st.session_state.live_confs)
+    
+        text = f"{label} ({conf_val*100:.1f}%)"
+        if freq >= consistency_threshold and avg_conf >= conf_threshold and len(st.session_state.live_preds) == max_frames:
+            text += " ✅"
+    
+        # Draw text on frame
+        cv2.putText(img, text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
+        return av.VideoFrame.from_ndarray(img, format="rgb24")
+    
+    webrtc_streamer(
+        key="live_demo",
+        mode=WebRtcMode.SENDRECV,
+        video_processor_factory=lambda: type("Processor", (), {"recv": process_frame})()
+    )
 
 
 # ---- WORD BUILDER DEMO (with dynamic adding) ----
