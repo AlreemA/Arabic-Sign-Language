@@ -16,7 +16,7 @@ import time
 def load_model():
     model = models.mobilenet_v3_large(pretrained=False)
     model.classifier[3] = nn.Linear(model.classifier[3].in_features, 32)
-    state_dict = torch.load("src/best_mobilenetv3.pth", map_location="cpu")
+    state_dict = torch.load("best_mobilenetv3.pth", map_location="cpu")
     model.load_state_dict(state_dict)
     model.eval()
     return model
