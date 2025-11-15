@@ -20,7 +20,7 @@ st.image(
     "https://i.pinimg.com/originals/e9/a9/93/e9a993a246e099cda75db9116447a281.png",
     use_container_width=True
 )
-st.title("Arabic Sign Language Detection Demo")
+st.title("Arabic Sign Language Recognition Demos")
 
 # ------------------ CLASS LABELS ------------------
 class_name = {
