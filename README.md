@@ -20,7 +20,7 @@
    $ streamlit run streamlit_app.py
    ```
 
-Contributors
+### Contributors
 
 Sara Ali Al Messabi – 202215001
 
