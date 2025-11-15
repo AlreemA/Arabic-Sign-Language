@@ -2,7 +2,8 @@
 
 
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)]([https://arabic-sign-language-csbp411-group8.streamlit.app/])
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://arabic-sign-language-csbp411-group8.streamlit.app/)
+
 
 ### How to run it on your own machine
 
