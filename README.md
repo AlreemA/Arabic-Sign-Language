@@ -18,3 +18,15 @@
    ```
    $ streamlit run streamlit_app.py
    ```
+
+Contributors
+
+Sara Ali Al Messabi – 202215001
+
+Aysha Alneyadi – 202102162
+
+Alreem Alkaabi – 202307361
+
+Sarah Alyammahi – 202200542
+
+Alyazia Khalifa Alblooshi – 202212335
