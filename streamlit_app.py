@@ -1,60 +1,49 @@
-from streamlit_webrtc import webrtc_streamer
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
 import streamlit as st
 import torch
 import torch.nn as nn
 import torchvision.models as models
 import torchvision.transforms as transforms
 from PIL import Image
-import cv2
 import numpy as np
-import time
+import cv2
 import av
-import pandas as pd
-from datetime import datetime
-import os
 import collections
+import time
 
-# ------------------ CONFIG ------------------
-st.set_page_config(page_title="Arabic Sign Language Detection", layout="centered")
-st.image(
-    "https://i.pinimg.com/originals/e9/a9/93/e9a993a246e099cda75db9116447a281.png",
-    use_container_width=True
-)
-st.title("Arabic Sign Language Detection Demo")
-
-# ------------------ CLASS LABELS ------------------
-class_name = {
-    "0": "ain", "1": "al", "2": "aleff", "3": "bb", "4": "dal", "5": "dha", "6": "dhad", "7": "fa",
-    "8": "gaaf", "9": "ghain", "10": "ha", "11": "haa", "12": "jeem", "13": "kaaf", "14": "khaa",
-    "15": "la", "16": "laam", "17": "meem", "18": "nun", "19": "ra", "20": "saad", "21": "seen",
-    "22": "sheen", "23": "ta", "24": "taa", "25": "thaa", "26": "thal", "27": "toot", "28": "waw",
-    "29": "ya", "30": "yaa", "31": "zay"
-}
-
-# ------------------ MODEL LOADING ------------------
+# ------------------ MODEL ------------------
 @st.cache_resource
 def load_model():
-    # Recreate the exact same architecture
     model = models.mobilenet_v3_large(pretrained=False)
     model.classifier[3] = nn.Linear(model.classifier[3].in_features, 32)
-
-    # Load your trained weights
-    state_dict = torch.load("best_mobilenetv3.pth", map_location="cpu")
+    state_dict = torch.load("src/best_mobilenetv3.pth", map_location="cpu")
     model.load_state_dict(state_dict)
     model.eval()
     return model
 
 model = load_model()
 
-# ------------------ IMAGE TRANSFORMS ------------------
 transform = transforms.Compose([
-    transforms.Resize((224, 224)),  # match training
+    transforms.Resize((224, 224)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                        std=[0.229, 0.224, 0.225])
+                         std=[0.229, 0.224, 0.225])
 ])
 
-# ------------------ HAND CROP FUNCTION ------------------
+class_name = {str(i): label for i, label in enumerate([
+    "ain","al","aleff","bb","dal","dha","dhad","fa","gaaf","ghain","ha","haa",
+    "jeem","kaaf","khaa","la","laam","meem","nun","ra","saad","seen","sheen",
+    "ta","taa","thaa","thal","toot","waw","ya","yaa","zay"
+])}
+
+arabic_map = {
+    "aleff": "ا","bb": "ب","ta": "ت","jeem": "ج","ha": "ه","ain": "ع","al": "ل","dal": "د",
+    "dha": "ذ","dhad": "ض","fa": "ف","gaaf": "ق","ghain": "غ","haa": "ح","kaaf": "ك","khaa": "خ",
+    "la": "ل","laam": "ل","meem": "م","nun": "ن","ra": "ر","saad": "ص","seen": "س","sheen": "ش",
+    "taa": "ط","thaa": "ث","thal": "ذ","toot": "ط","waw": "و","ya": "ي","yaa": "ي","zay": "ز"
+}
+
+# ------------------ HAND CROP ------------------
 def crop_hand(img_np):
     hsv = cv2.cvtColor(img_np, cv2.COLOR_RGB2HSV)
     lower_skin = np.array([0, 20, 70], dtype=np.uint8)
@@ -67,8 +56,7 @@ def crop_hand(img_np):
     if contours:
         c = max(contours, key=cv2.contourArea)
         x,y,w,h = cv2.boundingRect(c)
-        cropped = img_np[y:y+h, x:x+w]
-        return cropped
+        return img_np[y:y+h, x:x+w]
     return img_np
 
 # ------------------ DEMOS ------------------
@@ -136,91 +124,48 @@ with tab2:
 
 with tab3:
     st.write("**Real-time Arabic Sign Language Detection (Webcam Feed)**")
-    run_live = st.checkbox("Start Live Detection")
+   max_frames = 10
+conf_threshold = 0.85
+consistency_threshold = 0.8
 
-    FRAME_WINDOW = st.image([])  # video frame placeholder
-    status_text = st.empty()     # dynamic status display
+if "live_preds" not in st.session_state:
+    st.session_state.live_preds = collections.deque(maxlen=max_frames)
+    st.session_state.live_confs = collections.deque(maxlen=max_frames)
 
-    camera = cv2.VideoCapture(0)
+def process_frame(frame: av.VideoFrame) -> av.VideoFrame:
+    img = frame.to_ndarray(format="rgb24")
+    cropped = crop_hand(img)
+    img_tensor = transform(Image.fromarray(cropped)).unsqueeze(0)
 
-    # parameters for stability
-    max_frames = 10
-    conf_threshold = 0.85
-    consistency_threshold = 0.8
-    predictions, confidences = [], []
+    with torch.no_grad():
+        outputs = model(img_tensor)
+        probs = torch.softmax(outputs, dim=1)
+        conf, pred_idx = torch.max(probs, dim=1)
 
-    stop_detected = False
-    countdown_started = False
-    countdown_start_time = None
-    countdown_duration = 5  # seconds
+    label = class_name[str(pred_idx.item())]
+    conf_val = float(conf.item())
 
-    while run_live and not stop_detected:
-        ret, frame = camera.read()
-        if not ret:
-            st.warning("⚠️ Could not access webcam.")
-            break
+    st.session_state.live_preds.append(label)
+    st.session_state.live_confs.append(conf_val)
 
-        # Preprocess frame
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        cropped = crop_hand(frame_rgb)
-        cropped_pil = Image.fromarray(cropped).convert("RGB")
-        img_tensor = transform(cropped_pil).unsqueeze(0)
+    # Consistency check
+    most_common = max(set(st.session_state.live_preds), key=st.session_state.live_preds.count)
+    freq = st.session_state.live_preds.count(most_common) / len(st.session_state.live_preds)
+    avg_conf = sum(st.session_state.live_confs) / len(st.session_state.live_confs)
 
-        # Prediction
-        with torch.no_grad():
-            outputs = model(img_tensor)
-            probs = torch.softmax(outputs, dim=1)
-            conf, pred_idx = torch.max(probs, dim=1)
+    text = f"{label} ({conf_val*100:.1f}%)"
+    if freq >= consistency_threshold and avg_conf >= conf_threshold and len(st.session_state.live_preds) == max_frames:
+        text += " ✅"
 
-        predicted_label = class_name[str(pred_idx.item())]
-        predictions.append(predicted_label)
-        confidences.append(conf.item())
+    # Draw text on frame
+    cv2.putText(img, text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
+    return av.VideoFrame.from_ndarray(img, format="rgb24")
 
-        if len(predictions) > max_frames:
-            predictions.pop(0)
-            confidences.pop(0)
-
-        # consistency check
-        most_common = max(set(predictions), key=predictions.count)
-        freq = predictions.count(most_common) / len(predictions)
-        avg_conf = sum(confidences) / len(confidences)
-
-        # show label on frame
-        cv2.putText(frame_rgb, f"{predicted_label} ({conf.item()*100:.1f}%)",
-                    (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-
-        # stability condition
-        if freq >= consistency_threshold and avg_conf >= conf_threshold and len(predictions) == max_frames:
-            if not countdown_started:
-                countdown_started = True
-                countdown_start_time = time.time()
-                status_text.warning("🕒 Stable prediction detected! Holding for confirmation...")
-
-            elapsed = time.time() - countdown_start_time
-            remaining = countdown_duration - elapsed
-
-            # display countdown overlay
-            cv2.putText(frame_rgb, f"Locking in {max(0, int(remaining))}...",
-                        (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 100, 0), 2)
-
-            # if countdown complete
-            if remaining <= 0:
-                stop_detected = True
-                final_label = most_common
-                final_conf = avg_conf
-        else:
-            countdown_started = False  # reset if unstable
-            countdown_start_time = None
-            status_text.info("📷 Detecting... please hold your hand steady.")
-
-        FRAME_WINDOW.image(frame_rgb, channels="RGB", width='stretch')
-
-    camera.release()
-
-    if stop_detected:
-        status_text.success(f"✅ Final Prediction: **{final_label}** ({final_conf*100:.1f}%)")
-    elif run_live:
-        status_text.info("🛑 Detection stopped manually.")
+webrtc_streamer(
+    key="live_demo",
+    mode=WebRtcMode.SENDRECV,
+    video_processor_factory=lambda: type("Processor", (), {"recv": process_frame})()
+)
 
 
 # ---- WORD BUILDER DEMO (with dynamic adding) ----
@@ -349,161 +294,56 @@ with tab4:
 
 # -------------------- TAB 5: ⚡ WORD BUILDER LIVE --------------------
 with tab5:
-    st.write("## ⚡ Word Builder Live (Camera-Based)")
-    st.caption("Hold a steady sign; when stable, the letter is added automatically (same logic as Tab 3).")
+if "d5_word" not in st.session_state:
+    st.session_state.d5_word = ""
+    st.session_state.d5_preds = collections.deque(maxlen=max_frames)
+    st.session_state.d5_confs = collections.deque(maxlen=max_frames)
+    st.session_state.d5_countdown = False
+    st.session_state.d5_countdown_start = 0.0
 
-    # ---- Controls ----
-    colA, colB, colC, colD = st.columns([1, 1, 1, 2])
-    with colA:
-        if st.button("🧹 Clear Word"):
-            st.session_state.d5_word = ""
-    with colB:
-        if st.button("⌫ Backspace"):
-            st.session_state.d5_word = st.session_state.d5_word[:-1]
-    with colC:
-        run_live = st.checkbox("Start Live Word Builder")
-    with colD:
-        lock_secs = st.slider("Lock-in (s)", 1, 5, 2)
-    st.info("Tip: Hold your hand steady until countdown ends.")
+lock_secs = st.slider("Lock-in Duration (s)", 1, 5, 2)
 
-    # Parameters
-    max_frames = 10
-    conf_threshold = 0.85
-    consistency_threshold = 0.8
+def process_frame_word(frame: av.VideoFrame) -> av.VideoFrame:
+    img = frame.to_ndarray(format="rgb24")
+    cropped = crop_hand(img)
+    img_tensor = transform(Image.fromarray(cropped)).unsqueeze(0)
 
-    FRAME_WINDOW = st.image([], use_container_width=True)
-    status_text = st.empty()
+    with torch.no_grad():
+        outputs = model(img_tensor)
+        probs = torch.softmax(outputs, dim=1)
+        conf, pred_idx = torch.max(probs, dim=1)
 
-    # NEW: live placeholders for word & translation
-    word_box = st.empty()
-    trans_box = st.empty()
+    label = class_name[str(pred_idx.item())]
+    conf_val = float(conf.item())
 
-    # Arabic letter map
-    arabic_map = {
-        "aleff": "ا","bb": "ب","ta": "ت","jeem": "ج","ha": "ه","ain": "ع","al": "ل","dal": "د",
-        "dha": "ذ","dhad": "ض","fa": "ف","gaaf": "ق","ghain": "غ","haa": "ح","kaaf": "ك","khaa": "خ",
-        "la": "ل","laam": "ل","meem": "م","nun": "ن","ra": "ر","saad": "ص","seen": "س","sheen": "ش",
-        "taa": "ط","thaa": "ث","thal": "ذ","toot": "ط","waw": "و","ya": "ي","yaa": "ي","zay": "ز"
-    }
+    st.session_state.d5_preds.append(label)
+    st.session_state.d5_confs.append(conf_val)
 
-    # NEW: helper to translate & render live
-    def translate_and_render(word: str):
-        if not word:
-            trans_box.empty()
-            return
-        variants = {word}
-        if word.startswith("ا"):
-            variants.update({"أ" + word[1:], "إ" + word[1:], "آ" + word[1:]})
-        offline = {
-            "باب": "door","بيت": "house","قلب": "heart","حب": "love","نور": "light",
-            "كتاب": "book","مدرسة": "school","قلم": "pen","أم": "mother","ام": "mother"
-        }
-        results, tried_online = [], False
-        for form in variants:
-            t = offline.get(form)
-            if t is None:
-                try:
-                    from deep_translator import GoogleTranslator
-                    t = GoogleTranslator(source="ar", target="en").translate(form)
-                    tried_online = True
-                except Exception:
-                    t = None
-            if t:
-                results.append((form, t))
-        # de-duplicate by English text
-        seen, uniq = set(), []
-        for form, t in results:
-            key = t.strip().lower()
-            if key not in seen:
-                seen.add(key)
-                uniq.append((form, t))
-        if uniq:
-            trans_box.markdown("**English Translation (candidates):**\n" +
-                               "\n".join([f"- {f} → {t}" for f, t in sorted(uniq, key=lambda x: 0 if x[0]==word else 1)]))
-        else:
-            trans_box.warning("⚠️ Translation unavailable." if tried_online else "⚠️ Offline only. Try connecting to the internet.")
+    most_common = max(set(st.session_state.d5_preds), key=st.session_state.d5_preds.count)
+    freq = st.session_state.d5_preds.count(most_common) / len(st.session_state.d5_preds)
+    avg_conf = sum(st.session_state.d5_confs) / len(st.session_state.d5_confs)
 
-    # Camera open once
-    camera = None
-    if run_live:
-        camera = cv2.VideoCapture(0)
-        if not camera.isOpened():
-            status_text.error("⚠️ Could not access webcam. Check permissions or close other apps.")
-            run_live = False
+    # Stability check and countdown
+    if len(st.session_state.d5_preds) == max_frames and freq >= consistency_threshold and avg_conf >= conf_threshold:
+        if not st.session_state.d5_countdown:
+            st.session_state.d5_countdown = True
+            st.session_state.d5_countdown_start = time.time()
+        elapsed = time.time() - st.session_state.d5_countdown_start
+        remaining = lock_secs - elapsed
+        if remaining <= 0:
+            st.session_state.d5_word += arabic_map.get(most_common, "")
+            st.session_state.d5_preds.clear()
+            st.session_state.d5_confs.clear()
+            st.session_state.d5_countdown = False
+    else:
+        st.session_state.d5_countdown = False
 
-    import collections, time
-    predictions, confidences = collections.deque(maxlen=max_frames), collections.deque(maxlen=max_frames)
-    countdown_started, countdown_start_time = False, 0.0
+    # Overlay text
+    cv2.putText(img, f"Word: {st.session_state.d5_word}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,200,0), 2)
+    return av.VideoFrame.from_ndarray(img, format="rgb24")
 
-    while run_live:
-        ret, frame = camera.read()
-        if not ret:
-            status_text.warning("⚠️ Lost camera connection.")
-            break
-
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        try:
-            cropped = crop_hand(frame_rgb)
-        except Exception:
-            cropped = frame_rgb
-
-        img_tensor = transform(Image.fromarray(cropped)).unsqueeze(0)
-        with torch.no_grad():
-            outputs = model(img_tensor)
-            probs = torch.softmax(outputs, dim=1)
-            conf, pred_idx = torch.max(probs, dim=1)
-        predicted_label = class_name[str(pred_idx.item())]
-        conf_val = float(conf.item())
-
-        predictions.append(predicted_label)
-        confidences.append(conf_val)
-
-        # stability check
-        most_common = max(set(predictions), key=predictions.count)
-        freq = predictions.count(most_common) / len(predictions)
-        avg_conf = sum(confidences) / len(confidences)
-
-        cv2.putText(frame_rgb, f"{predicted_label} ({conf_val*100:.1f}%)",
-                    (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,150,255), 2)
-
-        stable = (len(predictions) == max_frames and
-                  freq >= consistency_threshold and
-                  avg_conf >= conf_threshold)
-
-        if stable and not countdown_started:
-            countdown_started = True
-            countdown_start_time = time.time()
-            status_text.warning("🕒 Stable sign detected… holding!")
-
-        if countdown_started:
-            remaining = lock_secs - (time.time() - countdown_start_time)
-            if remaining > 0:
-                cv2.putText(frame_rgb, f"Locking in {int(remaining)}s...",
-                            (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,100,0), 2)
-            else:
-                # Add the locked letter
-                arabic_char = arabic_map.get(most_common, "")
-                if arabic_char:
-                    st.session_state.d5_word += arabic_char
-                    status_text.success(f"✅ Added: {arabic_char} ({most_common})")
-                    # NEW: update live word & translation immediately
-                    word_box.markdown(f"### 📝 Arabic Word (Live): `{st.session_state.d5_word}`")
-                    translate_and_render(st.session_state.d5_word)
-                predictions.clear()
-                confidences.clear()
-                countdown_started = False
-
-        # Draw overlays and show frame
-        cv2.putText(frame_rgb, f"Word: {st.session_state.d5_word}",
-                    (20, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,200,0), 2)
-        FRAME_WINDOW.image(frame_rgb, channels="RGB", use_container_width=True)
-        time.sleep(0.02)
-
-    if camera:
-        camera.release()
-        status_text.info("🛑 Camera released.")
-
-    # Also render once when camera is OFF (so you still see latest translation)
-    current_word = st.session_state.d5_word
-    word_box.markdown(f"### 📝 Arabic Word (Live): `{current_word or '—'}`")
-    translate_and_render(current_word)
+webrtc_streamer(
+    key="word_builder_live",
+    mode=WebRtcMode.SENDRECV,
+    video_processor_factory=lambda: type("ProcessorWord", (), {"recv": process_frame_word})()
+)
