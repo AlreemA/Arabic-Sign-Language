@@ -58,7 +58,7 @@ def crop_hand(img_np):
     if contours:
         c = max(contours, key=cv2.contourArea)
         x,y,w,h = cv2.boundingRect(c)
-	cropped = img_np[y:y+h, x:x+w]
+		cropped = img_np[y:y+h, x:x+w]
         return cropped
  return img_np
 # ------------------ IMAGE TRANSFORMS ------------------
