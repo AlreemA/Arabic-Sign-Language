@@ -55,7 +55,7 @@ transform = transforms.Compose([
 ])
 
 # ------------------ HAND CROP FUNCTION ------------------
-def preprocess_and_predict(img):
+def crop_hand(img):
     hsv = cv2.cvtColor(img_np, cv2.COLOR_RGB2HSV)
     lower_skin = np.array([0, 20, 70], dtype=np.uint8)
     upper_skin = np.array([20, 255, 255], dtype=np.uint8)
