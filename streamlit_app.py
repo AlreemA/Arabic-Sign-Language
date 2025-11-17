@@ -54,27 +54,6 @@ transform = transforms.Compose([
                         std=[0.229, 0.224, 0.225])
 ])
 
-# ------------------  DEMO 1 FUNCTION ------------------
-def crop_hand(img):
-    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-
-    # Wider HSV range that works under different lighting
-    lower_skin = np.array([0, 30, 60], dtype=np.uint8)
-    upper_skin = np.array([45, 255, 255], dtype=np.uint8)
-
-    mask = cv2.inRange(hsv, lower_skin, upper_skin)
-
-    kernel = np.ones((3, 3), np.uint8)
-    mask = cv2.dilate(mask, kernel, iterations=2)
-    mask = cv2.GaussianBlur(mask, (5, 5), 0)
-
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if contours:
-        largest = max(contours, key=cv2.contourArea)
-        x, y, w, h = cv2.boundingRect(largest)
-        if w > 20 and h > 20:
-            return img[y:y+h, x:x+w]
-    return img
 
 # ------------------ DEMOS ------------------
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -105,26 +84,12 @@ with tab1:
 
     camera_input = st.camera_input("Take a picture")
     if camera_input is not None:
+        # Convert to NumPy array
         img = np.array(Image.open(camera_input))
         img = cv2.flip(img, 1)  # mirror webcam
 
-        # -------- HAND DETECTION USING SKIN MASK --------
-        hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-        lower_skin = np.array([0, 20, 70], dtype=np.uint8)
-        upper_skin = np.array([20, 255, 255], dtype=np.uint8)
-        mask = cv2.inRange(hsv, lower_skin, upper_skin)
-
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if contours:
-            largest = max(contours, key=cv2.contourArea)
-            x, y, w_box, h_box = cv2.boundingRect(largest)
-            img_cropped = img[y:y+h_box, x:x+w_box]
-        else:
-            img_cropped = img
-
-        # -------- RESIZE & TRANSFORM FOR PYTORCH --------
-        img_resized = cv2.resize(img_cropped, (224, 224))  # match your transform
-        img_pil = Image.fromarray(img_resized)
+        # -------- TRANSFORM FOR PYTORCH --------
+        img_pil = Image.fromarray(img)
         img_tensor = transform(img_pil).unsqueeze(0)
 
         # -------- PREDICT --------
@@ -137,7 +102,7 @@ with tab1:
         confidence = conf.item()
 
         # -------- DISPLAY RESULTS --------
-        st.image(img_cropped, caption="Detected Hand Region", width="stretch")
+        st.image(img, caption="Captured Image", width="stretch")
         st.markdown(f"### Predicted Letter: **{predicted_label}**")
         st.write(f"**Confidence:** {confidence:.2%}")
 
