@@ -105,15 +105,29 @@ with tab1:
 
     camera_input = st.camera_input("Take a picture")
     if camera_input is not None:
-        # Convert to NumPy array
         img = np.array(Image.open(camera_input))
         img = cv2.flip(img, 1)  # mirror webcam
 
-        img_cropped = crop_hand(img)
+        # -------- HAND DETECTION USING SKIN MASK --------
+        hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        lower_skin = np.array([0, 20, 70], dtype=np.uint8)
+        upper_skin = np.array([20, 255, 255], dtype=np.uint8)
+        mask = cv2.inRange(hsv, lower_skin, upper_skin)
 
-        img_pil = Image.fromarray(img_cropped)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if contours:
+            largest = max(contours, key=cv2.contourArea)
+            x, y, w_box, h_box = cv2.boundingRect(largest)
+            img_cropped = img[y:y+h_box, x:x+w_box]
+        else:
+            img_cropped = img
+
+        # -------- RESIZE & TRANSFORM FOR PYTORCH --------
+        img_resized = cv2.resize(img_cropped, (224, 224))  # match your transform
+        img_pil = Image.fromarray(img_resized)
         img_tensor = transform(img_pil).unsqueeze(0)
 
+        # -------- PREDICT --------
         with torch.no_grad():
             outputs = model(img_tensor)
             probs = torch.softmax(outputs, dim=1)
@@ -122,6 +136,7 @@ with tab1:
         predicted_label = class_name[str(pred_idx.item())]
         confidence = conf.item()
 
+        # -------- DISPLAY RESULTS --------
         st.image(img_cropped, caption="Detected Hand Region", width="stretch")
         st.markdown(f"### Predicted Letter: **{predicted_label}**")
         st.write(f"**Confidence:** {confidence:.2%}")
