@@ -54,39 +54,29 @@ transform = transforms.Compose([
                         std=[0.229, 0.224, 0.225])
 ])
 
-# ------------------ HAND CROP FUNCTION ------------------
-def preprocess_and_predict(img):
-    """
-    Flip → detect hand → crop → resize → normalize → predict
-    Returns: cropped_image, predicted_label, confidence
-    """
+# ------------------  DEMO 1 FUNCTION ------------------
 
-    # Flip horizontally (mirror)
+def preprocess_and_predict(img):
+
     img = cv2.flip(img, 1)
 
     # -------- HAND DETECTION --------
-    # Convert to HSV (Streamlit camera is RGB)
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
-    # Wide skin color range (new camera requires this)
     lower_skin = np.array([0, 30, 30], dtype=np.uint8)
     upper_skin = np.array([40, 255, 255], dtype=np.uint8)
 
     mask = cv2.inRange(hsv, lower_skin, upper_skin)
 
-    # Clean noise
     kernel = np.ones((5,5), np.uint8)
     mask = cv2.erode(mask, kernel, iterations=1)
     mask = cv2.dilate(mask, kernel, iterations=2)
     mask = cv2.GaussianBlur(mask, (7,7), 0)
 
-    # Find contours
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     if contours:
         largest = max(contours, key=cv2.contourArea)
-
-        # skip noise
         if cv2.contourArea(largest) > 4000:
             x, y, w, h = cv2.boundingRect(largest)
             img_cropped = img[y:y+h, x:x+w]
@@ -95,24 +85,21 @@ def preprocess_and_predict(img):
     else:
         img_cropped = img
 
-    # -------- PREPROCESS FOR MODEL --------
-    img_resized = cv2.resize(img_cropped, (128, 128))
-    img_normalized = img_resized / 255.0
-    img_expanded = np.expand_dims(img_normalized, axis=0)
+    # -------- PREPROCESS FOR PYTORCH --------
+    img_pil = Image.fromarray(img_cropped)
+    img_tensor = transform(img_pil).unsqueeze(0)
 
     # -------- PREDICT --------
-    prediction = model.predict(img_expanded)
+    with torch.no_grad():
+        outputs = model(img_tensor)
+        probs = torch.softmax(outputs, dim=1)
+        conf, pred_idx = torch.max(probs, dim=1)
 
-    if isinstance(prediction, dict):
-        prediction = list(prediction.values())[0]
-    if hasattr(prediction, "numpy"):
-        prediction = prediction.numpy()
-
-    predicted_idx = np.argmax(prediction)
-    confidence = float(np.max(prediction))
-    predicted_label = class_name[str(predicted_idx)]
+    predicted_label = class_name[str(pred_idx.item())]
+    confidence = conf.item()
 
     return img_cropped, predicted_label, confidence
+
 
 # ------------------ DEMOS ------------------
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
