@@ -118,7 +118,7 @@ for key, default in {
 
 # ---- CAMERA DEMO ----
 with tab1:
-     st.write("Capture a hand sign using your webcam.")
+    st.write("Capture a hand sign using your webcam.")
     camera_input = st.camera_input("Take a picture")
     if camera_input is not None:
         img = np.array(Image.open(camera_input))
