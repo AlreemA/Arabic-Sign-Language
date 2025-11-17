@@ -13,7 +13,7 @@ import pandas as pd
 from datetime import datetime
 import os
 import collections
-import mediapipe as mp
+
 # ------------------ CONFIG ------------------
 st.set_page_config(page_title="Arabic Sign Language Recognition", layout="centered")
 st.image(
@@ -55,33 +55,25 @@ transform = transforms.Compose([
 ])
 
 # ------------------  DEMO 1 FUNCTION ------------------
-mp_hands = mp.solutions.hands
 def crop_hand(img):
-    """
-    Crop hand using MediaPipe Hands.
-    Returns the cropped hand image, or the original image if no hand is detected.
-    """
-    with mp_hands.Hands(static_image_mode=True,
-                        max_num_hands=1,
-                        min_detection_confidence=0.5) as hands:
-        # Convert to RGB if not already
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) if img.shape[2] == 3 else img
-        results = hands.process(img_rgb)
+    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
-        if results.multi_hand_landmarks:
-            hand_landmarks = results.multi_hand_landmarks[0]
+    # Wider HSV range that works under different lighting
+    lower_skin = np.array([0, 30, 60], dtype=np.uint8)
+    upper_skin = np.array([45, 255, 255], dtype=np.uint8)
 
-            # Get bounding box from landmarks
-            h, w, _ = img.shape
-            x_coords = [int(lm.x * w) for lm in hand_landmarks.landmark]
-            y_coords = [int(lm.y * h) for lm in hand_landmarks.landmark]
+    mask = cv2.inRange(hsv, lower_skin, upper_skin)
 
-            x_min, x_max = max(min(x_coords)-10, 0), min(max(x_coords)+10, w)
-            y_min, y_max = max(min(y_coords)-10, 0), min(max(y_coords)+10, h)
+    kernel = np.ones((3, 3), np.uint8)
+    mask = cv2.dilate(mask, kernel, iterations=2)
+    mask = cv2.GaussianBlur(mask, (5, 5), 0)
 
-            return img[y_min:y_max, x_min:x_max]
-
-    # Fallback: return original image
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if contours:
+        largest = max(contours, key=cv2.contourArea)
+        x, y, w, h = cv2.boundingRect(largest)
+        if w > 20 and h > 20:
+            return img[y:y+h, x:x+w]
     return img
 
 # ------------------ DEMOS ------------------
@@ -108,19 +100,17 @@ for key, default in {
 
 
 # ---- CAMERA DEMO ----
-
 with tab1:
     st.write("Capture a hand sign using your webcam.")
 
     camera_input = st.camera_input("Take a picture")
     if camera_input is not None:
+        # Convert to NumPy array
         img = np.array(Image.open(camera_input))
-        img = cv2.flip(img, 1)  # mirror
+        img = cv2.flip(img, 1)  # mirror webcam
 
-        # Crop hand using MediaPipe
         img_cropped = crop_hand(img)
 
-        # Transform and predict
         img_pil = Image.fromarray(img_cropped)
         img_tensor = transform(img_pil).unsqueeze(0)
 
