@@ -56,20 +56,24 @@ transform = transforms.Compose([
 
 # ------------------ HAND CROP FUNCTION ------------------
 def crop_hand(img):
-    hsv = cv2.cvtColor(img_np, cv2.COLOR_RGB2HSV)
+    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+
     lower_skin = np.array([0, 20, 70], dtype=np.uint8)
     upper_skin = np.array([20, 255, 255], dtype=np.uint8)
+
     mask = cv2.inRange(hsv, lower_skin, upper_skin)
     kernel = np.ones((3,3), np.uint8)
     mask = cv2.dilate(mask, kernel, iterations=2)
     mask = cv2.GaussianBlur(mask, (5,5), 0)
+
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
     if contours:
         c = max(contours, key=cv2.contourArea)
         x,y,w,h = cv2.boundingRect(c)
-        cropped = img_np[y:y+h, x:x+w]
-        return cropped
-    return img_np
+        return img[y:y+h, x:x+w]
+
+    return img
 
 
 # ------------------ DEMOS ------------------
@@ -98,13 +102,14 @@ for key, default in {
 # ---- CAMERA DEMO ----
 with tab1:
     camera_input = st.camera_input("Take a picture")
+
     if camera_input is not None:
         img = Image.open(camera_input)
         img = img.transpose(Image.FLIP_LEFT_RIGHT)
         img_np = np.array(img)
 
-        # Crop hand
         img_cropped = crop_hand(img_np)
+
         img_tensor = transform(Image.fromarray(img_cropped)).unsqueeze(0)
 
         with torch.no_grad():
