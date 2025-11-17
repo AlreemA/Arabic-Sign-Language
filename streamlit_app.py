@@ -56,7 +56,6 @@ transform = transforms.Compose([
 
 # ------------------  DEMO 1 FUNCTION ------------------
 def crop_hand(img_np):
-def crop_hand(img_np):
     # Define simple skin color range in RGB
     lower_skin = np.array([95, 40, 20], dtype=np.uint8)   # R, G, B
     upper_skin = np.array([255, 200, 180], dtype=np.uint8)
