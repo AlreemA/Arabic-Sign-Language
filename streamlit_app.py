@@ -56,12 +56,14 @@ transform = transforms.Compose([
 
 # ------------------  DEMO 1 FUNCTION ------------------
 def crop_hand(img_np):
-    hsv = cv2.cvtColor(img_np, cv2.COLOR_RGB2HSV)
+def crop_hand(img_np):
+    # Define simple skin color range in RGB
+    lower_skin = np.array([95, 40, 20], dtype=np.uint8)   # R, G, B
+    upper_skin = np.array([255, 200, 180], dtype=np.uint8)
 
-    lower_skin = np.array([0, 20, 70], dtype=np.uint8)
-    upper_skin = np.array([20, 255, 255], dtype=np.uint8)
 
-    mask = cv2.inRange(hsv, lower_skin, upper_skin)
+    mask = cv2.inRange(img_np, lower_skin, upper_skin)
+
 
     kernel = np.ones((3, 3), np.uint8)
     mask = cv2.dilate(mask, kernel, iterations=2)
@@ -72,12 +74,10 @@ def crop_hand(img_np):
     if contours:
         c = max(contours, key=cv2.contourArea)
         x, y, w, h = cv2.boundingRect(c)
-
         if w > 20 and h > 20:
             return img_np[y:y+h, x:x+w]
 
     return img_np
-
 
 # ------------------ DEMOS ------------------
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
