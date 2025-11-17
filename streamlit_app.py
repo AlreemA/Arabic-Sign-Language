@@ -59,7 +59,7 @@ def crop_hand(img_np):
         c = max(contours, key=cv2.contourArea)
         x,y,w,h = cv2.boundingRect(c)
 		cropped = img_np[y:y+h, x:x+w]
-        return cropped
+    return cropped
  return img_np
 # ------------------ IMAGE TRANSFORMS ------------------
 transform = transforms.Compose([
