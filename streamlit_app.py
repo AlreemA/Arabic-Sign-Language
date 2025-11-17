@@ -139,17 +139,17 @@ for key, default in {
 
 # ---- CAMERA DEMO ----
 with tab1:
-camera_input = st.camera_input("Take a picture")
-if camera_input is not None:
-    img = Image.open(camera_input)
-    img = img.transpose(Image.FLIP_LEFT_RIGHT)
-    img_np = np.array(img)
-
-    cropped, label, conf = preprocess_and_predict(img_np)
-
-    st.image(cropped,
-             caption=f"{label} ({conf*100:.2f}%)",
-             use_container_width=True)
+    camera_input = st.camera_input("Take a picture")
+    if camera_input is not None:
+        img = Image.open(camera_input)
+        img = img.transpose(Image.FLIP_LEFT_RIGHT)
+        img_np = np.array(img)
+    
+        cropped, label, conf = preprocess_and_predict(img_np)
+    
+        st.image(cropped,
+                 caption=f"{label} ({conf*100:.2f}%)",
+                 use_container_width=True)
 
 # ---- UPLOAD DEMO ----
 with tab2:
