@@ -45,7 +45,22 @@ def load_model():
     return model
 
 model = load_model()
-
+# ------------------ Crop hand ------------------
+def crop_hand(img_np):
+    hsv = cv2.cvtColor(img_np, cv2.COLOR_RGB2HSV)
+    lower_skin = np.array([0, 20, 70], dtype=np.uint8)
+    upper_skin = np.array([20, 255, 255], dtype=np.uint8)
+    mask = cv2.inRange(hsv, lower_skin, upper_skin)
+    kernel = np.ones((3,3), np.uint8)
+    mask = cv2.dilate(mask, kernel, iterations=2)
+    mask = cv2.GaussianBlur(mask, (5,5), 0)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if contours:
+        c = max(contours, key=cv2.contourArea)
+        x,y,w,h = cv2.boundingRect(c)
+	cropped = img_np[y:y+h, x:x+w]
+        return cropped
+ return img_np
 # ------------------ IMAGE TRANSFORMS ------------------
 transform = transforms.Compose([
     transforms.Resize((224, 224)),  # match training
