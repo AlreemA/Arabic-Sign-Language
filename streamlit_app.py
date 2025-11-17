@@ -55,28 +55,40 @@ transform = transforms.Compose([
 ])
 
 # ------------------  DEMO 1 FUNCTION ------------------
-def crop_hand(img_np):
-    # Define simple skin color range in RGB
-    lower_skin = np.array([95, 40, 20], dtype=np.uint8)   # R, G, B
-    upper_skin = np.array([255, 200, 180], dtype=np.uint8)
+def crop_hand(img):
+    """
+    Crop the hand region from an RGB image using HSV skin detection and contours.
+    Returns the cropped hand, or the original image if no hand is found.
+    """
+    # Convert RGB to HSV
+    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
+    # Skin color range in HSV
+    lower_skin = np.array([0, 20, 70], dtype=np.uint8)
+    upper_skin = np.array([20, 255, 255], dtype=np.uint8)
 
-    mask = cv2.inRange(img_np, lower_skin, upper_skin)
+    # Create skin mask
+    mask = cv2.inRange(hsv, lower_skin, upper_skin)
 
-
-    kernel = np.ones((3, 3), np.uint8)
+    # Optional: smooth mask to remove noise
+    kernel = np.ones((3,3), np.uint8)
     mask = cv2.dilate(mask, kernel, iterations=2)
-    mask = cv2.GaussianBlur(mask, (5, 5), 0)
+    mask = cv2.GaussianBlur(mask, (5,5), 0)
 
+    # Find contours
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     if contours:
-        c = max(contours, key=cv2.contourArea)
-        x, y, w, h = cv2.boundingRect(c)
-        if w > 20 and h > 20:
-            return img_np[y:y+h, x:x+w]
+        # Take the largest contour as hand
+        largest = max(contours, key=cv2.contourArea)
+        x, y, w, h = cv2.boundingRect(largest)
 
-    return img_np
+        # Optional: ignore tiny areas
+        if w > 20 and h > 20:
+            return img[y:y+h, x:x+w]
+
+    # Fallback: return original image
+    return img
 
 # ------------------ DEMOS ------------------
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -102,16 +114,19 @@ for key, default in {
 
 
 # ---- CAMERA DEMO ----
+
 with tab1:
     st.write("Capture a hand sign using your webcam.")
 
     camera_input = st.camera_input("Take a picture")
-
     if camera_input is not None:
         img = np.array(Image.open(camera_input))
-        img = cv2.flip(img, 1)
+        img = cv2.flip(img, 1)  # mirror webcam
+
+        # Crop hand
         img_cropped = crop_hand(img)
 
+        # Transform and predict
         img_pil = Image.fromarray(img_cropped)
         img_tensor = transform(img_pil).unsqueeze(0)
 
@@ -123,9 +138,11 @@ with tab1:
         predicted_label = class_name[str(pred_idx.item())]
         confidence = conf.item()
 
+        # Display
         st.image(img_cropped, caption="Detected Hand Region", width="stretch")
         st.markdown(f"### Predicted Letter: **{predicted_label}**")
         st.write(f"**Confidence:** {confidence:.2%}")
+
 # ---- UPLOAD DEMO ----
 with tab2:
     uploaded_file = st.file_uploader("Upload an image of a hand sign", type=["jpg", "jpeg", "png"])
