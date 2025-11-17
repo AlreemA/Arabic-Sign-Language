@@ -56,42 +56,21 @@ transform = transforms.Compose([
 
 # ------------------ HAND CROP FUNCTION ------------------
 def preprocess_and_predict(img):
-    """Flip, detect hand, crop, resize, normalize, predict."""
-    # Flip horizontally
-    img = cv2.flip(img, 1)
-
-    # Hand detection using skin mask
-    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+    hsv = cv2.cvtColor(img_np, cv2.COLOR_RGB2HSV)
     lower_skin = np.array([0, 20, 70], dtype=np.uint8)
     upper_skin = np.array([20, 255, 255], dtype=np.uint8)
     mask = cv2.inRange(hsv, lower_skin, upper_skin)
-
+    kernel = np.ones((3,3), np.uint8)
+    mask = cv2.dilate(mask, kernel, iterations=2)
+    mask = cv2.GaussianBlur(mask, (5,5), 0)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if contours:
-        largest = max(contours, key=cv2.contourArea)
-        x, y, w_box, h_box = cv2.boundingRect(largest)
-        img_cropped = img[y:y+h_box, x:x+w_box]
-    else:
-        img_cropped = img
+        c = max(contours, key=cv2.contourArea)
+        x,y,w,h = cv2.boundingRect(c)
+        cropped = img_np[y:y+h, x:x+w]
+        return cropped
+    return img_np
 
-    # Resize & normalize
-    img_resized = cv2.resize(img_cropped, (128,128))
-    img_normalized = img_resized / 255.0
-    img_expanded = np.expand_dims(img_normalized, axis=0)
-
-    # Predict
-    prediction = model.predict(img_expanded)
-    if isinstance(prediction, dict):
-        prediction_tensor = list(prediction.values())[0]
-    else:
-        prediction_tensor = prediction
-    prediction_np = prediction_tensor.numpy() if hasattr(prediction_tensor, "numpy") else np.array(prediction_tensor)
-
-    predicted_class = str(np.argmax(prediction_np, axis=-1).item())
-    confidence = float(np.max(prediction_np))
-    predicted_label = class_name[predicted_class]
-
-    return img_cropped, predicted_label, confidence
 
 # ------------------ DEMOS ------------------
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -118,14 +97,23 @@ for key, default in {
 
 # ---- CAMERA DEMO ----
 with tab1:
-    st.write("Capture a hand sign using your webcam.")
     camera_input = st.camera_input("Take a picture")
     if camera_input is not None:
-        img = np.array(Image.open(camera_input))
-        img_cropped, predicted_label, confidence = preprocess_and_predict(img)
-        st.image(img_cropped, caption="Detected Hand Region", use_column_width=True)
-        st.markdown(f"###  Predicted Letter: **{predicted_label}**")
-        st.write(f"**Confidence:** {confidence:.2%}")
+        img = Image.open(camera_input)
+        img = img.transpose(Image.FLIP_LEFT_RIGHT)
+        img_np = np.array(img)
+
+        # Crop hand
+        img_cropped = crop_hand(img_np)
+        img_tensor = transform(Image.fromarray(img_cropped)).unsqueeze(0)
+
+        with torch.no_grad():
+            outputs = model(img_tensor)
+            probs = torch.softmax(outputs, dim=1)
+            conf, pred_idx = torch.max(probs, dim=1)
+
+        predicted_label = class_name[str(pred_idx.item())]
+        st.image(img_cropped, caption=f"Predicted: {predicted_label} ({conf.item()*100:.2f}%)", use_container_width=True)
 
 # ---- UPLOAD DEMO ----
 with tab2:
